@@ -2,14 +2,21 @@
 
 import { signIn, useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { GitBranch } from 'lucide-react';
+import { GitBranch, HelpCircle, Book } from 'lucide-react';
+import { checkBitbucketSettings } from '@/lib/settings';
+import BitbucketSetup from '@/components/BitbucketSetup';
 
 export default function SignIn() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const [hasSettings, setHasSettings] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    checkBitbucketSettings().then(setHasSettings);
+  }, []);
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -17,16 +24,23 @@ export default function SignIn() {
     }
   }, [status, router]);
 
-  if (status === 'loading') {
+  if (status === 'loading' || hasSettings === null) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
       </div>
     );
   }
 
+  if (!hasSettings) {
+    return <BitbucketSetup />;
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center space-y-4">
           <div className="mx-auto w-16 h-16 bg-primary rounded-2xl flex items-center justify-center">
@@ -57,6 +71,22 @@ export default function SignIn() {
           <p className="text-xs text-center text-muted-foreground">
             By signing in, you agree to access your Bitbucket repositories and deployment information
           </p>
+          <div className="pt-4 border-t space-y-2">
+            <button
+              onClick={() => router.push('/help/manual')}
+              className="w-full flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Book className="w-4 h-4" />
+              View Dashboard Manual
+            </button>
+            <button
+              onClick={() => router.push('/help')}
+              className="w-full flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <HelpCircle className="w-4 h-4" />
+              Need help setting up OAuth credentials?
+            </button>
+          </div>
         </CardContent>
       </Card>
     </div>

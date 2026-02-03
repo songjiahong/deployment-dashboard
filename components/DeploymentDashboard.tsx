@@ -64,7 +64,6 @@ export default function DeploymentDashboard() {
   const fetchWorkspaces = async () => {
     try {
       const response = await fetch('/api/bitbucket/workspaces');
-      console.log('Workspaces API response status:', response.status);
       
       if (!response.ok) {
         console.error('Workspaces API error:', response.status, response.statusText);
@@ -81,7 +80,6 @@ export default function DeploymentDashboard() {
       }
       
       const data = await response.json();
-      console.log('Workspaces API data:', data);
       
       // Validate that data is an array
       if (!Array.isArray(data)) {
@@ -91,10 +89,9 @@ export default function DeploymentDashboard() {
       }
       
       setWorkspaces(data);
-      console.log('Set workspaces:', data.length, 'workspaces');
       
       if (data.length > 0) {
-        // Load workspace from localStorage or use smart default
+        // Load workspace from localStorage or use first workspace
         const savedWorkspace = localStorage.getItem('selectedWorkspace');
         
         let workspaceToSelect;
@@ -102,15 +99,10 @@ export default function DeploymentDashboard() {
           // Use saved workspace if it still exists
           workspaceToSelect = savedWorkspace;
         } else {
-          // Prefer team workspaces with uppercase slugs (like CAPAYAU)
-          const teamWorkspace = data.find((ws: any) => {
-            const slug = ws.slug || '';
-            return slug === slug.toUpperCase() || !slug.includes('-');
-          }) || data[0];
-          workspaceToSelect = teamWorkspace.slug;
+          // Use first workspace if no saved workspace
+          workspaceToSelect = data[0].slug;
         }
         
-        console.log('Selected workspace:', workspaceToSelect, 'from', data.map((w: any) => w.slug));
         setSelectedWorkspace(workspaceToSelect);
         localStorage.setItem('selectedWorkspace', workspaceToSelect);
       }
@@ -200,7 +192,6 @@ export default function DeploymentDashboard() {
           if (Array.isArray(envs) && envs.length > 0) {
             globalEnvironments = envs;
             setEnvironments(envs);
-            console.log('Global environments from first repo:', globalEnvironments.map(e => e.name));
           }
         }
         break;
@@ -237,18 +228,6 @@ export default function DeploymentDashboard() {
               const envMap = new Map<string, DeploymentEnvironment>();
               for (const env of environmentsArray) {
                 envMap.set(env.uuid, env);
-              }
-              
-              // Debug: Log environment info
-              if (deploymentsArray.length > 0) {
-                console.log(`${repo.slug} deployments:`, deploymentsArray.map(d => ({
-                  envUuid: d.environment?.uuid,
-                  envName: envMap.get(d.environment?.uuid || '')?.name,
-                  pipeline: d.deployable?.name,
-                  number: d.number,
-                  commit: d.commit?.hash?.substring(0, 7),
-                  date: d.created_on
-                })));
               }
               
               // Organize deployments by environment UUID
@@ -323,8 +302,6 @@ export default function DeploymentDashboard() {
                   }
                 }
               }
-              
-              console.log(`${repo.slug} organized:`, deploymentsByEnv);
 
               return {
                 ...repo,

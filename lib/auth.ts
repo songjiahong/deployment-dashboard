@@ -1,5 +1,5 @@
 import { getServerSession } from 'next-auth';
-import { authOptions } from './auth-config';
+import { getAuthOptions } from './auth-options';
 import { BitbucketClient } from './bitbucket';
 
 export async function getBitbucketClient(): Promise<BitbucketClient | null> {
@@ -16,7 +16,7 @@ export async function getBitbucketClient(): Promise<BitbucketClient | null> {
 
     return new BitbucketClient(undefined, username, apiToken);
   } else {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(getAuthOptions());
 
     if (!session?.accessToken) {
       return null;
@@ -32,7 +32,7 @@ export async function isAuthenticated(): Promise<boolean> {
   if (authMethod === 'token') {
     return !!(process.env.BITBUCKET_API_TOKEN && process.env.BITBUCKET_USERNAME);
   } else {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(getAuthOptions());
     return !!session?.accessToken;
   }
 }

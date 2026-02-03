@@ -36,9 +36,8 @@ With OAuth, **users simply sign in with their Bitbucket accounts** - no manual t
    - **Callback URL**: `http://localhost:3000/api/auth/callback/bitbucket`
    - **Permissions**: Select the following:
      - Account: Read
-     - Repositories: Read, Write
-     - Pipelines: Read, Write
-     - Deployments: Read, Write
+     - Repositories: Read
+     - Pipelines: Read
 5. Save and note down the **Key** (Client ID) and **Secret** (Client Secret)
 
 > **Note:** You only create this OAuth consumer once. After that, any user can sign in with their Bitbucket account - they don't need to create any tokens!

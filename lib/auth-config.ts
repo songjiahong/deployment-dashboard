@@ -1,4 +1,5 @@
 import { NextAuthOptions } from 'next-auth';
+import { getBitbucketSettingsServer } from './settings-server';
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -30,8 +31,8 @@ export const authOptions: NextAuthOptions = {
           return await response.json();
         },
       },
-      clientId: process.env.BITBUCKET_CLIENT_ID,
-      clientSecret: process.env.BITBUCKET_CLIENT_SECRET,
+      clientId: getBitbucketSettingsServer()?.clientId || process.env.BITBUCKET_CLIENT_ID || '',
+      clientSecret: getBitbucketSettingsServer()?.clientSecret || process.env.BITBUCKET_CLIENT_SECRET || '',
       profile(profile) {
         return {
           id: profile.uuid,
