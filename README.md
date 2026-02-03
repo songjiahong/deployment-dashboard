@@ -2,6 +2,8 @@
 
 A modern web application for managing and monitoring Bitbucket deployments with OAuth authentication.
 
+🔗 **[GitHub Repository](https://github.com/songjiahong/deployment-dashboard)** | 🏠 **[Homepage](https://hexagonprofile.com/)**
+
 ## Features
 
 - 🔐 **Bitbucket OAuth Authentication** - Secure login with Bitbucket credentials
@@ -231,7 +233,12 @@ bitbucket-deployment-dashboard/
 
 ## License
 
-MIT
+MIT - See [LICENSE](LICENSE) file for details.
+
+## Links
+
+- **GitHub Repository**: [https://github.com/songjiahong/deployment-dashboard](https://github.com/songjiahong/deployment-dashboard)
+- **Homepage**: [https://hexagonprofile.com/](https://hexagonprofile.com/)
 
 ## Support
 

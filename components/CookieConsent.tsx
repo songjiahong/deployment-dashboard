@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { X, Cookie } from 'lucide-react';
+import { Cookie } from 'lucide-react';
 import { hasConsent, setConsent } from '@/lib/consent';
 
 interface CookieConsentProps {

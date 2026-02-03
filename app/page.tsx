@@ -4,10 +4,9 @@ import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import DeploymentDashboard from '@/components/DeploymentDashboard';
-import BitbucketSetup from '@/components/BitbucketSetup';
 import CookieConsent from '@/components/CookieConsent';
 import { Button } from '@/components/ui/button';
-import { LogOut, HelpCircle, Settings, Book, LayoutDashboard } from 'lucide-react';
+import { LogOut, HelpCircle, Settings, Book, LayoutDashboard, Github } from 'lucide-react';
 import { checkBitbucketSettings } from '@/lib/settings';
 import { hasConsent } from '@/lib/consent';
 
@@ -94,6 +93,14 @@ export default function Home() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button 
+              variant="ghost" 
+              onClick={() => window.open('https://github.com/songjiahong/deployment-dashboard', '_blank')} 
+              className="gap-2"
+            >
+              <Github className="w-4 h-4" />
+              GitHub
+            </Button>
             <Button variant="ghost" onClick={() => router.push('/help/manual')} className="gap-2">
               <Book className="w-4 h-4" />
               Manual
@@ -116,6 +123,31 @@ export default function Home() {
       <main>
         <DeploymentDashboard />
       </main>
+      <footer className="border-t py-4 mt-8">
+        <div className="container mx-auto px-6 text-center text-sm text-muted-foreground">
+          <div className="flex items-center justify-center gap-4">
+            <a 
+              href="https://github.com/songjiahong/deployment-dashboard" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="hover:text-primary transition-colors"
+            >
+              GitHub
+            </a>
+            <span>•</span>
+            <a 
+              href="https://hexagonprofile.com/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="hover:text-primary transition-colors"
+            >
+              hexagonprofile.com
+            </a>
+            <span>•</span>
+            <span>MIT License</span>
+          </div>
+        </div>
+      </footer>
     </div>
     </>
   );
