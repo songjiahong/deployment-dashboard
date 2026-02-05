@@ -23,7 +23,8 @@ export async function GET(request: NextRequest) {
     const deployments = await client.getDeployments(workspace, repoSlug);
     return NextResponse.json(deployments);
   } catch (error: any) {
-    if (error.status === 401) {
+    const status = error.status || error.response?.status;
+    if (status === 401) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -62,7 +63,8 @@ export async function POST(request: NextRequest) {
     );
     return NextResponse.json(deployment);
   } catch (error: any) {
-    if (error.status === 401) {
+    const status = error.status || error.response?.status;
+    if (status === 401) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }

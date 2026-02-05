@@ -43,7 +43,8 @@ export class BitbucketClient {
       });
       return response.data;
     } catch (error: any) {
-      if (error.response?.status === 401) {
+      const status = error.status || error.response?.status;
+      if (status === 401) {
         const authError = new Error('Unauthorized');
         (authError as any).status = 401;
         throw authError;
@@ -62,7 +63,8 @@ export class BitbucketClient {
       });
       return response.data;
     } catch (error: any) {
-      if (error.response?.status === 401) {
+      const status = error.status || error.response?.status;
+      if (status === 401) {
         const authError = new Error('Unauthorized');
         (authError as any).status = 401;
         throw authError;

@@ -23,7 +23,8 @@ export async function GET(request: NextRequest) {
     const environments = await client.getDeploymentEnvironments(workspace, repoSlug);
     return NextResponse.json(environments);
   } catch (error: any) {
-    if (error.status === 401) {
+    const status = error.status || error.response?.status;
+    if (status === 401) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
