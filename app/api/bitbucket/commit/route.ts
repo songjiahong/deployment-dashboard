@@ -26,7 +26,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Commit not found' }, { status: 404 });
     }
     return NextResponse.json(commit);
-  } catch (error) {
+  } catch (error: any) {
+    if (error.status === 401) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
     console.error('Failed to fetch commit:', error);
     return NextResponse.json(
       { error: 'Failed to fetch commit' },

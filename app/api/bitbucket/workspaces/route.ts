@@ -12,6 +12,12 @@ export async function GET(request: NextRequest) {
     const workspaces = await client.getWorkspaces();
     return NextResponse.json(workspaces);
   } catch (error: any) {
+    if (error.status === 401) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
     return NextResponse.json(
       { error: error.message || 'Failed to fetch workspaces' },
       { status: 500 }

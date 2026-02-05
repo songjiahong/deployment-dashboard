@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession, signOut } from 'next-auth/react';
+import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -36,42 +37,31 @@ export default function DeploymentDashboard() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Helper function to check for auth errors and redirect
-  const checkAuthError = (response: Response) => {
+  // Helper function to check for auth errors and sign out
+  const checkAuthError = useCallback(async (response: Response) => {
     if (response.status === 401) {
-      alert('Your session has expired. Please sign in again.');
-      window.location.href = '/api/auth/signin';
+      toast.error('Session Expired', {
+        description: 'Your Bitbucket token has expired. Signing you out...',
+        duration: 3000,
+      });
+      // Wait a moment for the toast to be visible, then sign out
+      setTimeout(() => {
+        signOut({ callbackUrl: '/auth/signin' });
+      }, 1000);
       return true;
     }
     return false;
-  };
+  }, []);
 
-  useEffect(() => {
-    if (session) {
-      fetchWorkspaces();
-    }
-  }, [session]);
-
-  useEffect(() => {
-    if (selectedWorkspace) {
-      // Save workspace selection to localStorage whenever it changes
-      localStorage.setItem('selectedWorkspace', selectedWorkspace);
-      fetchProjects();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedWorkspace]);
-
-  const fetchWorkspaces = async () => {
+  const fetchWorkspaces = useCallback(async () => {
     try {
       const response = await fetch('/api/bitbucket/workspaces');
       
       if (!response.ok) {
         console.error('Workspaces API error:', response.status, response.statusText);
         
-        // If unauthorized, redirect to signin
-        if (response.status === 401) {
-          alert('Your session has expired. Please sign in again.');
-          window.location.href = '/api/auth/signin';
+        // If unauthorized, show toast and sign out
+        if (await checkAuthError(response)) {
           return;
         }
         
@@ -109,12 +99,33 @@ export default function DeploymentDashboard() {
     } catch (error) {
       console.error('Failed to fetch workspaces:', error);
     }
-  };
+  }, [checkAuthError]);
+
+  useEffect(() => {
+    if (session) {
+      fetchWorkspaces();
+    }
+  }, [session, fetchWorkspaces]);
+
+  useEffect(() => {
+    if (selectedWorkspace) {
+      // Save workspace selection to localStorage whenever it changes
+      localStorage.setItem('selectedWorkspace', selectedWorkspace);
+      fetchProjects();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedWorkspace]);
 
   const fetchProjects = useCallback(async () => {
     setLoading(true);
     try {
       const response = await fetch(`/api/bitbucket/projects?workspace=${selectedWorkspace}`);
+      
+      if (await checkAuthError(response)) {
+        setLoading(false);
+        return;
+      }
+      
       const data = await response.json();
       setProjects(data);
       
@@ -182,12 +193,22 @@ export default function DeploymentDashboard() {
         const reposResponse = await fetch(
           `/api/bitbucket/repositories?workspace=${selectedWorkspace}&projectKey=${project.key}`
         );
+        
+        if (await checkAuthError(reposResponse)) {
+          return;
+        }
+        
         const repos: BitbucketRepository[] = await reposResponse.json();
         
         if (repos.length > 0 && globalEnvironments.length === 0) {
           const envResponse = await fetch(
             `/api/bitbucket/environments?workspace=${selectedWorkspace}&repoSlug=${repos[0].slug}`
           );
+          
+          if (await checkAuthError(envResponse)) {
+            return;
+          }
+          
           const envs = await envResponse.json();
           if (Array.isArray(envs) && envs.length > 0) {
             globalEnvironments = envs;
@@ -206,6 +227,11 @@ export default function DeploymentDashboard() {
         const reposResponse = await fetch(
           `/api/bitbucket/repositories?workspace=${selectedWorkspace}&projectKey=${project.key}`
         );
+        
+        if (await checkAuthError(reposResponse)) {
+          return;
+        }
+        
         const repos: BitbucketRepository[] = await reposResponse.json();
 
         const reposWithDeployments: RepoWithDeployments[] = await Promise.all(
@@ -216,6 +242,18 @@ export default function DeploymentDashboard() {
                 fetch(`/api/bitbucket/pipelines?workspace=${selectedWorkspace}&repoSlug=${repo.slug}`),
                 fetch(`/api/bitbucket/environments?workspace=${selectedWorkspace}&repoSlug=${repo.slug}`)
               ]);
+              
+              // Check for auth errors on any of the responses
+              if (await checkAuthError(deploymentsResponse) || 
+                  await checkAuthError(pipelinesResponse) || 
+                  await checkAuthError(environmentsResponse)) {
+                return {
+                  ...repo,
+                  deployments: [],
+                  pipelines: [],
+                  deploymentsByEnv: {},
+                };
+              }
 
               const deployments = await deploymentsResponse.json();
               const pipelines = await pipelinesResponse.json();
@@ -278,6 +316,15 @@ export default function DeploymentDashboard() {
                       const commitResponse = await fetch(
                         `/api/bitbucket/commit?workspace=${selectedWorkspace}&repoSlug=${repo.slug}&commitHash=${commitHash}`
                       );
+                      
+                      if (await checkAuthError(commitResponse)) {
+                        return {
+                          ...repo,
+                          deployments: [],
+                          pipelines: [],
+                          deploymentsByEnv: {},
+                        };
+                      }
                       
                       if (commitResponse.ok) {
                         const commitData = await commitResponse.json();

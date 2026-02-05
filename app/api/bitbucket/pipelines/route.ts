@@ -32,6 +32,12 @@ export async function GET(request: NextRequest) {
     );
     return NextResponse.json(pipelines);
   } catch (error: any) {
+    if (error.status === 401) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
     return NextResponse.json(
       { error: error.message || 'Failed to fetch pipelines' },
       { status: 500 }
@@ -65,6 +71,12 @@ export async function POST(request: NextRequest) {
     );
     return NextResponse.json(pipeline);
   } catch (error: any) {
+    if (error.status === 401) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
     return NextResponse.json(
       { error: error.message || 'Failed to trigger pipeline' },
       { status: 500 }

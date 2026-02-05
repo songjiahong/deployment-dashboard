@@ -25,6 +25,12 @@ export async function GET(request: NextRequest) {
       : await client.getRepositories(workspace);
     return NextResponse.json(repositories);
   } catch (error: any) {
+    if (error.status === 401) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
     return NextResponse.json(
       { error: error.message || 'Failed to fetch repositories' },
       { status: 500 }

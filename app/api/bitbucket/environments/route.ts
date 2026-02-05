@@ -22,7 +22,13 @@ export async function GET(request: NextRequest) {
   try {
     const environments = await client.getDeploymentEnvironments(workspace, repoSlug);
     return NextResponse.json(environments);
-  } catch (error) {
+  } catch (error: any) {
+    if (error.status === 401) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
     console.error('Failed to fetch environments:', error);
     return NextResponse.json(
       { error: 'Failed to fetch environments' },

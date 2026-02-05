@@ -22,6 +22,12 @@ export async function GET(request: NextRequest) {
     const projects = await client.getProjects(workspace);
     return NextResponse.json(projects);
   } catch (error: any) {
+    if (error.status === 401) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
     return NextResponse.json(
       { error: error.message || 'Failed to fetch projects' },
       { status: 500 }

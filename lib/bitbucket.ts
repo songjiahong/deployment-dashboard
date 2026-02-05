@@ -37,20 +37,38 @@ export class BitbucketClient {
   }
 
   private async get<T>(url: string): Promise<T> {
-    const response = await axios.get<T>(url, {
-      headers: this.getAuthHeaders(),
-    });
-    return response.data;
+    try {
+      const response = await axios.get<T>(url, {
+        headers: this.getAuthHeaders(),
+      });
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        const authError = new Error('Unauthorized');
+        (authError as any).status = 401;
+        throw authError;
+      }
+      throw error;
+    }
   }
 
   private async post<T>(url: string, data?: any): Promise<T> {
-    const response = await axios.post<T>(url, data, {
-      headers: {
-        ...this.getAuthHeaders(),
-        'Content-Type': 'application/json',
-      },
-    });
-    return response.data;
+    try {
+      const response = await axios.post<T>(url, data, {
+        headers: {
+          ...this.getAuthHeaders(),
+          'Content-Type': 'application/json',
+        },
+      });
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        const authError = new Error('Unauthorized');
+        (authError as any).status = 401;
+        throw authError;
+      }
+      throw error;
+    }
   }
 
   async getWorkspaces(): Promise<any[]> {
