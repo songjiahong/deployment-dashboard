@@ -98,9 +98,9 @@ export default function SettingsPage() {
       <div className="min-h-screen bg-gray-50">
         <header className="border-b">
           <div className="container mx-auto px-6 py-4">
-            <Button variant="ghost" onClick={() => router.back()} className="gap-2">
+            <Button variant="ghost" onClick={() => router.push('/')} className="gap-2">
               <ArrowLeft className="w-4 h-4" />
-              Back
+              Back to Dashboard
             </Button>
           </div>
         </header>

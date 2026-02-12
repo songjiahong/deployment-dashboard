@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { GitBranch, HelpCircle, Book } from 'lucide-react';
-import { checkBitbucketSettings } from '@/lib/settings';
+import { GitBranch, HelpCircle, Book, Trash2, Settings } from 'lucide-react';
+import { checkBitbucketSettings, clearBitbucketSettings } from '@/lib/settings';
 import BitbucketSetup from '@/components/BitbucketSetup';
 
 export default function SignIn() {
@@ -72,6 +72,27 @@ export default function SignIn() {
             By signing in, you agree to access your Bitbucket repositories and deployment information
           </p>
           <div className="pt-4 border-t space-y-2">
+            <button
+              onClick={() => router.push('/settings')}
+              className="w-full flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Settings className="w-4 h-4" />
+              Update OAuth Settings
+            </button>
+            <button
+              onClick={async () => {
+                if (confirm('Are you sure you want to clear your OAuth credentials? You will need to reconfigure them.')) {
+                  const result = await clearBitbucketSettings();
+                  if (result) {
+                    setHasSettings(false);
+                  }
+                }
+              }}
+              className="w-full flex items-center justify-center gap-2 text-sm text-red-500 hover:text-red-700 transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+              Clear Settings & Reconfigure
+            </button>
             <button
               onClick={() => router.push('/help/manual')}
               className="w-full flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"

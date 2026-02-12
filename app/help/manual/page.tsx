@@ -11,7 +11,7 @@ export default function ManualPage() {
     <div className="min-h-screen bg-gray-50">
       <header className="border-b bg-white">
         <div className="container mx-auto px-6 py-4">
-          <Button variant="ghost" onClick={() => router.back()} className="gap-2">
+          <Button variant="ghost" onClick={() => router.push('/')} className="gap-2">
             <ArrowLeft className="w-4 h-4" />
             Back to Dashboard
           </Button>
@@ -338,9 +338,6 @@ export default function ManualPage() {
           <div className="flex gap-4">
             <Button onClick={() => router.push('/help')} variant="outline">
               OAuth Setup Guide
-            </Button>
-            <Button onClick={() => router.push('/')} variant="default">
-              Back to Dashboard
             </Button>
           </div>
         </div>
