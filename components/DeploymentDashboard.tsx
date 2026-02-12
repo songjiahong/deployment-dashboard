@@ -36,6 +36,7 @@ export default function DeploymentDashboard() {
   const [environments, setEnvironments] = useState<DeploymentEnvironment[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshingProjects, setRefreshingProjects] = useState<Set<string>>(new Set());
 
   // Helper function to check for auth errors and sign out
   const checkAuthError = useCallback(async (response: Response) => {
@@ -367,11 +368,11 @@ export default function DeploymentDashboard() {
           })
         );
 
-        // Update UI immediately as each project finishes loading
-        setProjectGroups(prevGroups => [...prevGroups, {
-          project,
-          repositories: reposWithDeployments,
-        }]);
+        // Update UI immediately as each project finishes loading (with dedup)
+        setProjectGroups(prevGroups => {
+          const filtered = prevGroups.filter(g => g.project.key !== project.key);
+          return [...filtered, { project, repositories: reposWithDeployments }];
+        });
       } catch (error) {
         console.error(`Failed to fetch repos for project ${project.key}:`, error);
       }
@@ -402,6 +403,151 @@ export default function DeploymentDashboard() {
     localStorage.setItem(storageKey, JSON.stringify(Array.from(newCollapsed)));
   };
 
+  const fetchSingleProjectDeployments = async (project: BitbucketProject) => {
+    try {
+      const reposResponse = await fetch(
+        `/api/bitbucket/repositories?workspace=${selectedWorkspace}&projectKey=${project.key}`
+      );
+
+      if (await checkAuthError(reposResponse)) {
+        return;
+      }
+
+      const repos: BitbucketRepository[] = await reposResponse.json();
+
+      const reposWithDeployments: RepoWithDeployments[] = await Promise.all(
+        repos.map(async (repo) => {
+          try {
+            const [deploymentsResponse, pipelinesResponse, environmentsResponse] = await Promise.all([
+              fetch(`/api/bitbucket/deployments?workspace=${selectedWorkspace}&repoSlug=${repo.slug}`),
+              fetch(`/api/bitbucket/pipelines?workspace=${selectedWorkspace}&repoSlug=${repo.slug}`),
+              fetch(`/api/bitbucket/environments?workspace=${selectedWorkspace}&repoSlug=${repo.slug}`)
+            ]);
+
+            // Check for auth errors on any of the responses
+            if (await checkAuthError(deploymentsResponse) ||
+                await checkAuthError(pipelinesResponse) ||
+                await checkAuthError(environmentsResponse)) {
+              return {
+                ...repo,
+                deployments: [],
+                pipelines: [],
+                deploymentsByEnv: {},
+              };
+            }
+
+            const deployments = await deploymentsResponse.json();
+            const pipelines = await pipelinesResponse.json();
+            const environments = await environmentsResponse.json();
+
+            const deploymentsArray = Array.isArray(deployments) ? deployments : [];
+            const environmentsArray = Array.isArray(environments) ? environments : [];
+
+            const envMap = new Map<string, DeploymentEnvironment>();
+            for (const env of environmentsArray) {
+              envMap.set(env.uuid, env);
+            }
+
+            const deploymentsByEnv: DeploymentByEnv = {};
+            for (const deployment of deploymentsArray) {
+              const envUuid = deployment.environment?.uuid || '';
+              const env = envMap.get(envUuid);
+
+              if (env) {
+                const envKey = env.name.toLowerCase();
+                const isProdEnv = envKey.includes('prod');
+
+                const isSuccessful = deployment.state?.status?.name?.toUpperCase() === 'SUCCESSFUL' ||
+                                    deployment.state?.status?.type?.includes('successful');
+
+                if (isProdEnv && !isSuccessful) {
+                  continue;
+                }
+
+                const currentTime = new Date(deployment.created_on).getTime();
+                const existingTime = deploymentsByEnv[envKey] ? new Date(deploymentsByEnv[envKey].created_on).getTime() : 0;
+
+                if (!deploymentsByEnv[envKey] || currentTime > existingTime) {
+                  deploymentsByEnv[envKey] = deployment;
+                }
+              }
+            }
+
+            const commitCache = new Map<string, string>();
+
+            for (const envKey in deploymentsByEnv) {
+              const deployment = deploymentsByEnv[envKey];
+              const commitHash = deployment.deployable?.commit?.hash;
+
+              if (commitHash) {
+                try {
+                  let commitMessage: string | undefined;
+
+                  if (commitCache.has(commitHash)) {
+                    commitMessage = commitCache.get(commitHash);
+                  } else {
+                    const commitResponse = await fetch(
+                      `/api/bitbucket/commit?workspace=${selectedWorkspace}&repoSlug=${repo.slug}&commitHash=${commitHash}`
+                    );
+
+                    if (await checkAuthError(commitResponse)) {
+                      return {
+                        ...repo,
+                        deployments: [],
+                        pipelines: [],
+                        deploymentsByEnv: {},
+                      };
+                    }
+
+                    if (commitResponse.ok) {
+                      const commitData = await commitResponse.json();
+                      if (commitData.message) {
+                        commitMessage = commitData.message;
+                        commitCache.set(commitHash, commitData.message);
+                      }
+                    }
+                  }
+
+                  if (commitMessage) {
+                    if (!deployment.commit) {
+                      deployment.commit = { hash: commitHash, type: 'commit' };
+                    }
+                    deployment.commit.message = commitMessage;
+                    deployment.commit.hash = commitHash;
+                  }
+                } catch (error) {
+                  console.error(`${repo.slug} - ${envKey}: Failed to fetch commit message:`, error);
+                }
+              }
+            }
+
+            return {
+              ...repo,
+              deployments: deploymentsArray,
+              pipelines: Array.isArray(pipelines) ? pipelines.slice(0, 5) : [],
+              deploymentsByEnv,
+            };
+          } catch (error) {
+            return {
+              ...repo,
+              deployments: [],
+              pipelines: [],
+              deploymentsByEnv: {},
+            };
+          }
+        })
+      );
+
+      // Append without duplicates
+      setProjectGroups(prevGroups => {
+        const filtered = prevGroups.filter(g => g.project.key !== project.key);
+        return [...filtered, { project, repositories: reposWithDeployments }];
+      });
+    } catch (error) {
+      console.error(`Failed to fetch repos for project ${project.key}:`, error);
+    }
+  };
+
   const toggleProject = async (projectKey: string) => {
     const newSelected = new Set(selectedProjects);
     const isRemoving = newSelected.has(projectKey);
@@ -412,10 +558,10 @@ export default function DeploymentDashboard() {
       setProjectGroups(prevGroups => prevGroups.filter(g => g.project.key !== projectKey));
     } else {
       newSelected.add(projectKey);
-      // Only fetch the newly selected project
+      // Only fetch the newly selected project and append it
       const newProject = projects.find(p => p.key === projectKey);
       if (newProject) {
-        await fetchAllDeployments([newProject]);
+        await fetchSingleProjectDeployments(newProject);
       }
     }
     
@@ -548,6 +694,25 @@ export default function DeploymentDashboard() {
                       </CardTitle>
                       <CardDescription>{group.project.description || 'No description'}</CardDescription>
                     </div>
+                    <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={async () => {
+                        setRefreshingProjects(prev => new Set(prev).add(group.project.key));
+                        await fetchSingleProjectDeployments(group.project);
+                        setRefreshingProjects(prev => {
+                          const next = new Set(prev);
+                          next.delete(group.project.key);
+                          return next;
+                        });
+                      }}
+                      disabled={refreshingProjects.has(group.project.key)}
+                      className="gap-2"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${refreshingProjects.has(group.project.key) ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -566,6 +731,7 @@ export default function DeploymentDashboard() {
                         </>
                       )}
                     </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 {!isCollapsed && (
