@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,6 +37,9 @@ export default function DeploymentDashboard() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshingProjects, setRefreshingProjects] = useState<Set<string>>(new Set());
+  const [projectOrder, setProjectOrder] = useState<string[]>([]);
+  const draggedProjectRef = useRef<string | null>(null);
+  const [dragOverProject, setDragOverProject] = useState<string | null>(null);
 
   // Helper function to check for auth errors and sign out
   const checkAuthError = useCallback(async (response: Response) => {
@@ -130,6 +133,32 @@ export default function DeploymentDashboard() {
       const data = await response.json();
       setProjects(data);
       
+      // Load project order from localStorage or default to alphabetical
+      const orderKey = `projectOrder_${selectedWorkspace}`;
+      const savedOrder = localStorage.getItem(orderKey);
+      const allKeys = data.map((p: BitbucketProject) => p.key);
+      let order: string[];
+      if (savedOrder) {
+        const parsed = JSON.parse(savedOrder);
+        // Keep saved order for existing projects, append new ones alphabetically
+        const validSaved = parsed.filter((key: string) => allKeys.includes(key));
+        const newKeys = allKeys.filter((key: string) => !validSaved.includes(key));
+        newKeys.sort((a: string, b: string) => {
+          const nameA = data.find((p: BitbucketProject) => p.key === a)?.name || a;
+          const nameB = data.find((p: BitbucketProject) => p.key === b)?.name || b;
+          return nameA.localeCompare(nameB);
+        });
+        order = [...validSaved, ...newKeys];
+      } else {
+        // Default: alphabetical by project name
+        order = [...allKeys].sort((a: string, b: string) => {
+          const nameA = data.find((p: BitbucketProject) => p.key === a)?.name || a;
+          const nameB = data.find((p: BitbucketProject) => p.key === b)?.name || b;
+          return nameA.localeCompare(nameB);
+        });
+      }
+      setProjectOrder(order);
+      
       // Load selected projects from localStorage or default to all
       const storageKey = `selectedProjects_${selectedWorkspace}`;
       const savedSelection = localStorage.getItem(storageKey);
@@ -171,10 +200,11 @@ export default function DeploymentDashboard() {
       // Turn off loading immediately so progressive updates are visible
       setLoading(false);
       
-      // Fetch deployments only for selected projects
-      const selectedProjectsList = data.filter((p: BitbucketProject) => 
-        projectsToSelect.has(p.key)
-      );
+      // Fetch deployments only for selected projects, in order
+      const selectedProjectsList = order
+        .filter((key: string) => projectsToSelect.has(key))
+        .map((key: string) => data.find((p: BitbucketProject) => p.key === key)!)
+        .filter(Boolean);
       await fetchAllDeployments(selectedProjectsList);
     } catch (error) {
       console.error('Failed to fetch projects:', error);
@@ -279,11 +309,16 @@ export default function DeploymentDashboard() {
                   const envKey = env.name.toLowerCase();
                   const isProdEnv = envKey.includes('prod');
                   
-                  // For prod, only consider successful deployments
-                  const isSuccessful = deployment.state?.status?.name?.toUpperCase() === 'SUCCESSFUL' || 
-                                      deployment.state?.status?.type?.includes('successful');
+                  // For prod, only consider successful/completed deployments
+                  const statusName = deployment.state?.status?.name?.toUpperCase() || '';
+                  const statusType = deployment.state?.status?.type || '';
+                  const stateName = deployment.state?.name?.toUpperCase() || '';
+                  const isSuccessful = statusName === 'SUCCESSFUL' || 
+                                      statusType.includes('successful') ||
+                                      stateName === 'COMPLETED';
                   
                   if (isProdEnv && !isSuccessful) {
+                    console.debug(`[${repo.slug}] Skipping prod deployment ${deployment.deployable?.name || deployment.uuid}: state=${JSON.stringify(deployment.state)}`);
                     continue; // Skip non-successful deployments for prod
                   }
                   
@@ -383,8 +418,11 @@ export default function DeploymentDashboard() {
     setRefreshing(true);
     // Clear existing groups to prevent duplicates
     setProjectGroups([]);
-    // Filter to only selected projects
-    const selectedProjectsList = projects.filter(p => selectedProjects.has(p.key));
+    // Filter to only selected projects, in order
+    const selectedProjectsList = projectOrder
+      .filter(key => selectedProjects.has(key))
+      .map(key => projects.find(p => p.key === key)!)
+      .filter(Boolean);
     await fetchAllDeployments(selectedProjectsList);
     setRefreshing(false);
   };
@@ -457,8 +495,12 @@ export default function DeploymentDashboard() {
                 const envKey = env.name.toLowerCase();
                 const isProdEnv = envKey.includes('prod');
 
-                const isSuccessful = deployment.state?.status?.name?.toUpperCase() === 'SUCCESSFUL' ||
-                                    deployment.state?.status?.type?.includes('successful');
+                const statusName = deployment.state?.status?.name?.toUpperCase() || '';
+                const statusType = deployment.state?.status?.type || '';
+                const stateName = deployment.state?.name?.toUpperCase() || '';
+                const isSuccessful = statusName === 'SUCCESSFUL' || 
+                                    statusType.includes('successful') ||
+                                    stateName === 'COMPLETED';
 
                 if (isProdEnv && !isSuccessful) {
                   continue;
@@ -538,10 +580,15 @@ export default function DeploymentDashboard() {
         })
       );
 
-      // Append without duplicates
+      // Update in-place to preserve order, or append if new
       setProjectGroups(prevGroups => {
-        const filtered = prevGroups.filter(g => g.project.key !== project.key);
-        return [...filtered, { project, repositories: reposWithDeployments }];
+        const index = prevGroups.findIndex(g => g.project.key === project.key);
+        if (index >= 0) {
+          const updated = [...prevGroups];
+          updated[index] = { project, repositories: reposWithDeployments };
+          return updated;
+        }
+        return [...prevGroups, { project, repositories: reposWithDeployments }];
       });
     } catch (error) {
       console.error(`Failed to fetch repos for project ${project.key}:`, error);
@@ -592,6 +639,65 @@ export default function DeploymentDashboard() {
       toSave[key] = Array.from(repos);
     });
     localStorage.setItem(storageKey, JSON.stringify(toSave));
+  };
+
+  // Projects sorted by projectOrder for the top selector
+  const sortedProjects = useMemo(() => {
+    if (projectOrder.length === 0) return projects;
+    return [...projects].sort((a, b) => {
+      const indexA = projectOrder.indexOf(a.key);
+      const indexB = projectOrder.indexOf(b.key);
+      return (indexA === -1 ? Infinity : indexA) - (indexB === -1 ? Infinity : indexB);
+    });
+  }, [projects, projectOrder]);
+
+  // Project groups ordered by projectOrder
+  const orderedProjectGroups = useMemo(() => {
+    if (projectOrder.length === 0) return projectGroups;
+    return [...projectGroups].sort((a, b) => {
+      const indexA = projectOrder.indexOf(a.project.key);
+      const indexB = projectOrder.indexOf(b.project.key);
+      return (indexA === -1 ? Infinity : indexA) - (indexB === -1 ? Infinity : indexB);
+    });
+  }, [projectGroups, projectOrder]);
+
+  // Drag-and-drop handlers for project reordering
+  const handleDragStart = (projectKey: string) => {
+    draggedProjectRef.current = projectKey;
+  };
+
+  const handleDragOver = (e: React.DragEvent, projectKey: string) => {
+    e.preventDefault();
+    setDragOverProject(projectKey);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverProject(null);
+  };
+
+  const handleDrop = (targetKey: string) => {
+    const draggedKey = draggedProjectRef.current;
+    setDragOverProject(null);
+    draggedProjectRef.current = null;
+
+    if (!draggedKey || draggedKey === targetKey) return;
+
+    const newOrder = [...projectOrder];
+    const draggedIndex = newOrder.indexOf(draggedKey);
+    const targetIndex = newOrder.indexOf(targetKey);
+    if (draggedIndex === -1 || targetIndex === -1) return;
+
+    newOrder.splice(draggedIndex, 1);
+    newOrder.splice(targetIndex, 0, draggedKey);
+
+    setProjectOrder(newOrder);
+    const orderKey = `projectOrder_${selectedWorkspace}`;
+    localStorage.setItem(orderKey, JSON.stringify(newOrder));
+  };
+
+  const handleDragEnd = () => {
+    draggedProjectRef.current = null;
+    setDragOverProject(null);
   };
 
   const openBitbucketDeployments = (workspace: string, repoSlug: string) => {
@@ -652,15 +758,21 @@ export default function DeploymentDashboard() {
           </div>
 
           <div>
-            <label className="text-sm font-medium mb-2 block">Projects</label>
+            <label className="text-sm font-medium mb-2 block">Projects <span className="text-xs text-muted-foreground font-normal">(drag to reorder)</span></label>
             <div className="flex flex-wrap gap-2">
-              {projects.map((project) => (
+              {sortedProjects.map((project) => (
                 <Button
                   key={project.uuid}
                   variant={selectedProjects.has(project.key) ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => toggleProject(project.key)}
-                  className="gap-2"
+                  draggable
+                  onDragStart={() => handleDragStart(project.key)}
+                  onDragOver={(e) => handleDragOver(e, project.key)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={() => handleDrop(project.key)}
+                  onDragEnd={handleDragEnd}
+                  className={`gap-2 cursor-grab active:cursor-grabbing ${dragOverProject === project.key ? 'ring-2 ring-primary ring-offset-2' : ''}`}
                 >
                   {selectedProjects.has(project.key) ? (
                     <Trash2 className="w-3 h-3" />
@@ -681,7 +793,7 @@ export default function DeploymentDashboard() {
         </div>
       ) : (
         <div className="space-y-6">
-          {projectGroups.map((group) => {
+          {orderedProjectGroups.map((group) => {
             const isCollapsed = collapsedProjects.has(group.project.key);
             return (
               <Card key={group.project.uuid}>
