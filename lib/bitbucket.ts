@@ -116,15 +116,24 @@ export class BitbucketClient {
       
       let allDeployments = response.values || [];
       
-      // If there's a next page, fetch it to get more deployments
-      if (response.next && allDeployments.length >= 100) {
+      // Fetch all remaining pages to ensure we have the latest deployment for every environment
+      // The API does not guarantee sort order, so we must fetch all to find the latest per env
+      let nextUrl = response.next;
+      let pageCount = 1;
+      while (nextUrl) {
         try {
-          const nextResponse = await this.get<PaginatedResponse<BitbucketDeployment>>(response.next);
+          const nextResponse = await this.get<PaginatedResponse<BitbucketDeployment>>(nextUrl);
           allDeployments = [...allDeployments, ...(nextResponse.values || [])];
+          nextUrl = nextResponse.next;
+          pageCount++;
         } catch (error) {
-          // Continue with what we have if next page fails
           console.error('Failed to fetch next page of deployments:', error);
+          break;
         }
+      }
+      
+      if (pageCount > 1) {
+        console.log(`[${repoSlug}] Fetched ${allDeployments.length} deployments across ${pageCount} pages`);
       }
       
       return allDeployments;
