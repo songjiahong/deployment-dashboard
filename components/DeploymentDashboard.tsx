@@ -751,7 +751,7 @@ export default function DeploymentDashboard() {
             >
               {workspaces.map((ws) => (
                 <option key={ws.uuid} value={ws.slug}>
-                  {ws.name}
+                  {ws.slug}
                 </option>
               ))}
             </select>

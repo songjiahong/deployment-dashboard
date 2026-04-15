@@ -74,10 +74,12 @@ export class BitbucketClient {
   }
 
   async getWorkspaces(): Promise<any[]> {
+    // Use /user/permissions/workspaces (replacement for deprecated /workspaces)
     const response = await this.get<PaginatedResponse<any>>(
-      `${BITBUCKET_API_BASE}/workspaces`
+      `${BITBUCKET_API_BASE}/user/workspaces`
     );
-    return response.values;
+    // Extract workspace objects from membership entries
+    return (response.values || []).map((membership: any) => membership.workspace);
   }
 
   async getProjects(workspace: string): Promise<BitbucketProject[]> {
